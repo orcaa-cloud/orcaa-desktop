@@ -9,6 +9,12 @@ The release workflow's `manifest` job reads the `## <version>` section verbatim;
 no entry → users see the generic "Improvements and fixes." line and CI emits a
 warning. Adding the entry is part of the version-bump checklist in the README.
 
+## 1.4.3
+
+- Enter payment details and see confirmation inside Orcaa, in Arabic or English.
+- Resume an unfinished checkout without creating the purchase again.
+- Return to Orcaa safely after required bank verification.
+
 ## 1.4.2
 
 - Orcaa now runs on Windows 7. A dedicated build for Windows 7 SP1 counter PCs

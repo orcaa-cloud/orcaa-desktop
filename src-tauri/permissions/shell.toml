@@ -143,3 +143,7 @@ skip this version. Local only — the hosted app has no business installing
 binaries.
 """
 commands.allow = ["update_install", "update_snooze", "update_skip"]
+[[permission]]
+identifier = "allow-shell-payments"
+description = "Register a checkout return; cannot authenticate or settle payments."
+commands.allow = ["shell_payment_register"]

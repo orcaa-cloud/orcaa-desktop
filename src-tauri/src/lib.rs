@@ -6,6 +6,7 @@ mod print;
 mod raster;
 mod shell_page;
 mod signin;
+mod payment;
 #[cfg(windows)]
 mod spooler;
 mod updater;
@@ -964,6 +965,7 @@ pub fn run() {
 
     builder
         .invoke_handler(tauri::generate_handler![
+            payment::shell_payment_register,
             signin_start,
             shell_reload,
             shell_fullscreen_toggle,
@@ -1036,6 +1038,7 @@ pub fn run() {
                 base_domain: base_domain_of(&fallback_url),
             });
             app.manage(PendingSignIn::default());
+            app.manage(payment::PendingPayment::default());
             app.manage(PendingUpdate::default());
             app.manage(strings.clone());
 
@@ -1174,6 +1177,7 @@ pub fn run() {
             let deep_link_handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 for url in event.urls() {
+                    payment::complete(&deep_link_handle, &url);
                     complete_browser_sign_in(&deep_link_handle, &url);
                 }
             });
@@ -1185,6 +1189,7 @@ pub fn run() {
             if let Ok(Some(urls)) = app.deep_link().get_current() {
                 let cold_handle = app.handle().clone();
                 for url in urls {
+                    payment::complete(&cold_handle, &url);
                     complete_browser_sign_in(&cold_handle, &url);
                 }
             }

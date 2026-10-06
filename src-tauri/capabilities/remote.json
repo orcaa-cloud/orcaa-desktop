@@ -22,6 +22,7 @@
     "allow-shell-notify",
     "allow-shell-window",
     "allow-shell-badge",
+    "allow-shell-payments",
     "allow-shell-pos",
     "allow-shell-kitchen",
     "core:window:allow-start-dragging",
