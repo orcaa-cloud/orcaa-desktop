@@ -9,6 +9,12 @@ The release workflow's `manifest` job reads the `## <version>` section verbatim;
 no entry → users see the generic "Improvements and fixes." line and CI emits a
 warning. Adding the entry is part of the version-bump checklist in the README.
 
+## 1.4.4
+
+- Restore macOS downloads for Intel and Apple Silicon.
+- Enter payment details and see confirmation inside Orcaa, in Arabic or English.
+- Resume an unfinished checkout and return safely after bank verification.
+
 ## 1.4.3
 
 - Enter payment details and see confirmation inside Orcaa, in Arabic or English.

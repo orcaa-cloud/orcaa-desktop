@@ -183,6 +183,18 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
+      # Resolve every shipped architecture against the committed lockfile.
+      # Windows-only checks can miss macOS updater dependencies such as zip.
+      - name: Verify locked Rust dependencies
+        shell: bash
+        env:
+          RUST_TARGETS: ${{ matrix.target.rust_targets }}
+        run: |
+          set -euo pipefail
+          for target in ${RUST_TARGETS//,/ }; do
+            cargo fetch --locked --manifest-path src-tauri/Cargo.toml --target "$target"
+          done
+
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
@@ -311,7 +323,7 @@ jobs:
           # letting each runner write its own would have the second one clobber
           # the first one's platform entry.
           includeUpdaterJson: false
-          args: --config src-tauri/tauri.business.conf.json ${{ env.WIN_SIGN_ARGS }} ${{ matrix.target.build_args }}
+          args: --config src-tauri/tauri.business.conf.json ${{ env.WIN_SIGN_ARGS }} ${{ matrix.target.build_args }} -- --locked
 
       - name: Upload stable-name Windows installer
         if: runner.os == 'Windows'
@@ -540,7 +552,7 @@ jobs:
           # Prove the target-scoped rustflags are in effect before spending 7 minutes compiling.
           cargo config get --format json-value "target.${{ matrix.target }}.rustflags" -Z unstable-options | grep -q "crt-static" \
             || { echo "::error::src-tauri/.cargo/config.toml rustflags for ${{ matrix.target }} were not picked up by cargo."; exit 1; }
-          cargo build --release --target "${{ matrix.target }}"
+          cargo build --locked --release --target "${{ matrix.target }}"
 
       # NSIS only: the MSI lane is for IT-managed Win10/11 fleets, and the Win7
       # overlay's fixedRuntime block is what makes the installer self-contained.

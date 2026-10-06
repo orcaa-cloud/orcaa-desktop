@@ -413,6 +413,16 @@ Note: paste the **contents**, not the path. tauri-action expects the key as a st
 > compares `1.0.0 > 1.0.0`, decides it is current, and never updates. This
 > silently stalled updates for the whole 1.0.x line. Bump the config, always.
 
+Before tagging, verify the macOS dependency graph even from a Windows workstation:
+
+```bash
+cargo fetch --locked --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin --target x86_64-apple-darwin
+```
+
+Release jobs also fetch each architecture's dependencies and build with `--locked`, so the
+committed lockfile must resolve without CI changing versions. A Windows-only build can miss
+dependencies used by the macOS updater.
+
 Keep all four in lockstep — CI fails the release if any of them drift:
 
 ```bash
