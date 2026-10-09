@@ -59,7 +59,13 @@ impl PendingSignIn {
     /// Replaces any previous attempt: if someone restarts sign-in, only the
     /// newest callback should be honoured (the backend likewise deletes the
     /// older ticket).
-    pub fn begin(&self, auth_base: &str, scheme: &str) -> Option<Url> {
+    ///
+    /// `machine` is this computer's hashed id (`machine::machine_hash`), when
+    /// the OS gave one. It rides along as `dh` so the auth app can label its
+    /// requests with the PC the sign-in started on. It is NOT part of the
+    /// exchange's security — nothing checks it on the way back, and a link
+    /// with it stripped is simply an ordinary browser sign-in.
+    pub fn begin(&self, auth_base: &str, scheme: &str, machine: Option<&str>) -> Option<Url> {
         let attempt = Attempt {
             state: random_token(32),
             verifier: random_token(64),
@@ -75,6 +81,10 @@ impl PendingSignIn {
             // codebase but must NOT share a scheme: whichever installed last
             // would win the registration and swallow the other's callbacks.
             .append_pair("dsch", scheme);
+
+        if let Some(machine) = machine {
+            url.query_pairs_mut().append_pair("dh", machine);
+        }
 
         *self.0.lock().ok()? = Some(attempt);
 
@@ -169,7 +179,9 @@ mod tests {
 
     fn begin() -> (PendingSignIn, String) {
         let pending = PendingSignIn::default();
-        let url = pending.begin("https://auth.orcaa.cloud", "orcaa").unwrap();
+        let url = pending
+            .begin("https://auth.orcaa.cloud", "orcaa", None)
+            .unwrap();
         let state = url
             .query_pairs()
             .find(|(k, _)| k == "ds")
@@ -182,7 +194,9 @@ mod tests {
     #[test]
     fn browser_url_carries_the_challenge_not_the_verifier() {
         let pending = PendingSignIn::default();
-        let url = pending.begin("https://auth.orcaa.cloud", "orcaa").unwrap();
+        let url = pending
+            .begin("https://auth.orcaa.cloud", "orcaa", None)
+            .unwrap();
         let query = url.query().unwrap();
 
         assert!(query.contains("desktop=1"));
@@ -193,6 +207,42 @@ mod tests {
             !query.contains(&verifier),
             "the verifier must never reach the browser"
         );
+    }
+
+    #[test]
+    fn browser_url_carries_the_machine_hash_when_there_is_one() {
+        let machine = "a".repeat(64);
+        let pending = PendingSignIn::default();
+        let url = pending
+            .begin("https://auth.orcaa.cloud", "orcaa", Some(&machine))
+            .unwrap();
+
+        let carried = url
+            .query_pairs()
+            .find(|(k, _)| k == "dh")
+            .map(|(_, v)| v.into_owned());
+        assert_eq!(carried.as_deref(), Some(machine.as_str()));
+
+        // Adding it must not have disturbed the exchange itself.
+        let query = url.query().unwrap();
+        let verifier = pending.0.lock().unwrap().clone().unwrap().verifier;
+        assert!(query.contains("dc=") && query.contains("ds="));
+        assert!(
+            !query.contains(&verifier),
+            "the verifier must never reach the browser"
+        );
+    }
+
+    #[test]
+    fn browser_url_has_no_machine_parameter_when_the_os_gave_none() {
+        // No id is the ordinary browser case, not an error — and an empty
+        // `dh=` would be a value the auth app has to special-case.
+        let pending = PendingSignIn::default();
+        let url = pending
+            .begin("https://auth.orcaa.cloud", "orcaa", None)
+            .unwrap();
+
+        assert!(url.query_pairs().all(|(k, _)| k != "dh"));
     }
 
     #[test]

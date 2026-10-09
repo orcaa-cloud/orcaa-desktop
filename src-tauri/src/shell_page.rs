@@ -749,7 +749,13 @@ const INIT_JS: &str = r#"
   // WebView2 is pinned at 109 and the OS has no toast centre; the app uses it
   // to skip the notification plugin (not compiled in there) and to show its
   // one-time compatibility notice. `webview` is the runtime version string.
-  window.__ORCAA_SHELL__ = Object.freeze({ legacy: __LEGACY__, webview: __WEBVIEW__ });
+  //
+  // `machine` is the salted hash of this computer's OS machine id (see
+  // machine.rs), or "" when the OS would not say. The app sends it as
+  // `X-Hardware-Id` so a platform ban can be keyed on the PC itself — the one
+  // identifier that survives clearing storage. Shells before 1.4.6 publish no
+  // `machine` at all, which the app reads the same way as "".
+  window.__ORCAA_SHELL__ = Object.freeze({ legacy: __LEGACY__, webview: __WEBVIEW__, machine: __MACHINE__ });
 
   const invoke = (cmd, args) => {
     try { return window.__TAURI_INTERNALS__.invoke(cmd, args || {}); }
@@ -836,7 +842,14 @@ const INIT_JS: &str = r#"
 /// could read it (`tauri::webview_version()`); it is exposed to the app as a
 /// string literal, so it goes through the same escaping as every other value
 /// that lands in a script.
-pub fn shell_init_js(_strings: &Strings, webview_version: Option<&str>) -> String {
+///
+/// `machine` is `machine::machine_hash()` — a hex digest we produced, but it is
+/// still escaped like any other value rather than trusted to be inert.
+pub fn shell_init_js(
+    _strings: &Strings,
+    webview_version: Option<&str>,
+    machine: Option<&str>,
+) -> String {
     INIT_JS
         .replace(
             "__DEBUG__",
@@ -851,6 +864,7 @@ pub fn shell_init_js(_strings: &Strings, webview_version: Option<&str>) -> Strin
             if cfg!(legacy_win7) { "true" } else { "false" },
         )
         .replace("__WEBVIEW__", &js_string(webview_version.unwrap_or("")))
+        .replace("__MACHINE__", &js_string(machine.unwrap_or("")))
 }
 
 #[cfg(test)]
@@ -923,7 +937,7 @@ mod tests {
         // Window chrome / topbar is owned and drawn entirely by the frontend web apps
         // (AppTopbar + WindowControls). The desktop shell must not inject a duplicate
         // titlebar into the webview.
-        let js = shell_init_js(&strings(), None);
+        let js = shell_init_js(&strings(), None, None);
         assert!(!js.contains("orcaa-shell-titlebar"));
         assert!(!js.contains("drag-edge"));
 
@@ -1038,7 +1052,7 @@ mod tests {
 
     #[test]
     fn the_injected_script_only_claims_modified_keys() {
-        let js = shell_init_js(&strings(), None);
+        let js = shell_init_js(&strings(), None, None);
 
         // A bare-key binding here would shadow the app's own "/" search.
         assert!(js.contains("e.ctrlKey || e.metaKey"));
@@ -1057,7 +1071,7 @@ mod tests {
         // module-evaluation time, so the global must be set before the first
         // command could possibly be invoked — and both placeholders must be
         // substituted, or the page would throw a ReferenceError at startup.
-        let js = shell_init_js(&strings(), Some("109.0.1518.140"));
+        let js = shell_init_js(&strings(), Some("109.0.1518.140"), None);
 
         let global = js
             .find("window.__ORCAA_SHELL__")
@@ -1066,6 +1080,10 @@ mod tests {
         assert!(global < first_invoke, "shell facts must come first");
 
         assert!(!js.contains("__LEGACY__") && !js.contains("__WEBVIEW__"));
+        // An unsubstituted `__MACHINE__` would be a ReferenceError on the very
+        // first line of every page — the app would not start.
+        assert!(!js.contains("__MACHINE__"));
+        assert!(js.contains(r#"machine: """#), "no machine id reads as empty");
         assert!(js.contains(r#"webview: "109.0.1518.140""#));
         assert!(
             js.contains(if cfg!(legacy_win7) {
@@ -1077,8 +1095,22 @@ mod tests {
         );
 
         // No version known → an empty string, never `undefined` or a bare hole.
-        let js = shell_init_js(&strings(), None);
+        let js = shell_init_js(&strings(), None, None);
         assert!(js.contains(r#"webview: """#));
+    }
+
+    #[test]
+    fn the_machine_hash_is_published_as_an_escaped_string() {
+        let machine = "9f".repeat(32);
+        let js = shell_init_js(&strings(), None, Some(&machine));
+
+        assert!(js.contains(&format!(r#"machine: "{machine}""#)));
+
+        // It is our own hex digest, but it still goes through the same
+        // escaping as everything else that lands in a script: a value that
+        // could close the string would be script injection into every page.
+        let hostile = shell_init_js(&strings(), None, Some(r#""});alert(1);({x:""#));
+        assert!(!hostile.contains(r#"machine: ""});alert(1)"#));
     }
 
     #[test]
@@ -1087,7 +1119,7 @@ mod tests {
         // `contextmenu` listener here runs BEFORE the app's `useGlobalContextMenu`
         // — and the moment it calls `preventDefault()` the app's handler sees
         // `defaultPrevented` and bails, leaving the page with no menu at all.
-        let js = shell_init_js(&strings(), None);
+        let js = shell_init_js(&strings(), None, None);
 
         assert!(
             !js.contains("addEventListener('contextmenu'"),
@@ -1109,7 +1141,7 @@ mod tests {
         // A full reload throws away React state and every warm query for what
         // the user meant as "refresh"; the app re-pulls data instead. The hard
         // reload stays available on Ctrl+Shift+R.
-        let js = shell_init_js(&strings(), None);
+        let js = shell_init_js(&strings(), None, None);
 
         assert!(
             js.contains("orcaa:refresh"),

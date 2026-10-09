@@ -1,6 +1,7 @@
 mod i18n;
 mod kitchen;
 mod label;
+mod machine;
 mod notify;
 mod print;
 mod raster;
@@ -404,7 +405,9 @@ fn start_browser_sign_in(app: &AppHandle) {
     };
     let pending = app.state::<PendingSignIn>();
 
-    let Some(browser_url) = pending.begin(&config.auth_base, DEEP_LINK_SCHEME) else {
+    let Some(browser_url) =
+        pending.begin(&config.auth_base, DEEP_LINK_SCHEME, machine::machine_hash())
+    else {
         log::error!("failed to start browser sign-in");
         return;
     };
@@ -1095,6 +1098,7 @@ pub fn run() {
             .initialization_script(shell_init_js(
                 &strings,
                 tauri::webview_version().ok().as_deref(),
+                machine::machine_hash(),
             ))
             .on_download(|webview, event| on_download_event(&webview.app_handle().clone(), event))
             .on_navigation(move |url| {

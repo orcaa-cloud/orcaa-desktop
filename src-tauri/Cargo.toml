@@ -1,6 +1,6 @@
 [package]
 name = "orcaa-desktop"
-version = "1.4.5"
+version = "1.4.6"
 description = "Orcaa desktop wrapper (Business + Admin)"
 authors = ["Orcaa"]
 edition = "2021"
@@ -85,6 +85,10 @@ windows = { version = "0.61", features = [
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Printing",
     "Win32_Security",
+    # machine.rs reads HKLM\…\Cryptography\MachineGuid — the stable id of
+    # the PC behind `X-Hardware-Id`. Classic advapi32 calls, present on
+    # Windows 7. A feature flag only: no new crate enters the lock file.
+    "Win32_System_Registry",
     "Win32_UI_WindowsAndMessaging",
 ] }
 
